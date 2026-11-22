@@ -1,0 +1,17 @@
+node_modules/
+.expo/
+.vercel/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.turbo/
+*.keystore
+*.jks
+*.p8
+*.p12
+*.mobileprovision

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: "**/package.json"
+      - name: Secret scan
+        run: .github/check-secrets.sh
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck (api, mobile, contracts)
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Expo dependency check
+        working-directory: apps/mobile
+        run: npx --yes expo-doctor@latest
+        continue-on-error: true
+      - name: Bundle Android JS (smoke test)
+        working-directory: apps/mobile
+        env:
+          EXPO_PUBLIC_API_BASE_URL: https://dockkey-ci.invalid
+        run: npx expo export --platform android
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json
+          if-no-files-found: ignore

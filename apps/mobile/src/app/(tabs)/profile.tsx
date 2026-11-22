@@ -1,0 +1,15 @@
+import { Text, View, Pressable } from "react-native";
+import { Moon, Sun, Monitor, ShieldCheck, Server } from "lucide-react-native";
+import { Screen } from "../../components/ui/Screen";
+import { Card } from "../../components/ui/Card";
+import { useThemeStore } from "../../theme/theme-store";
+import { getApiBaseUrl } from "../../lib/api";
+const API_BASE_URL = getApiBaseUrl();
+export default function ProfileScreen() {
+  const mode = useThemeStore(s => s.mode); const setMode = useThemeStore(s => s.setMode);
+  return <Screen><Text className="text-xs font-bold uppercase tracking-widest text-light-muted dark:text-dark-muted">PREFERENCES</Text><Text className="mt-1 text-3xl font-extrabold text-light-text dark:text-dark-text">Settings</Text><Card className="mt-6"><View className="flex-row items-center"><View className="h-12 w-12 items-center justify-center rounded-2xl bg-[#DDF2EB]"><ShieldCheck color="#278F7D" size={24}/></View><View className="ml-3 flex-1"><Text className="text-base font-extrabold text-light-text dark:text-dark-text">Provider security</Text><Text className="mt-1 text-xs text-light-muted dark:text-dark-muted">API Key dikelola di backend, bukan APK.</Text></View></View></Card>
+    <Text className="mb-3 mt-7 text-lg font-extrabold text-light-text dark:text-dark-text">Backend</Text><Card><View className="flex-row items-center"><Server color="#278F7D" size={20}/><Text className="ml-2 text-sm font-bold text-light-text dark:text-dark-text">API endpoint</Text></View><Text selectable className="mt-2 text-xs leading-5 text-light-muted dark:text-dark-muted">{API_BASE_URL || "Belum dikonfigurasi saat build"}</Text></Card>
+    <Text className="mb-3 mt-7 text-lg font-extrabold text-light-text dark:text-dark-text">Appearance</Text><Card><Text className="mb-3 text-sm font-bold text-light-text dark:text-dark-text">Theme</Text><View className="flex-row gap-2">{([{id:"light",label:"Light",Icon:Sun},{id:"dark",label:"Dark",Icon:Moon},{id:"system",label:"System",Icon:Monitor}] as const).map(({id,label,Icon})=><Pressable key={id} onPress={()=>void setMode(id)} className={`flex-1 items-center rounded-2xl border p-3 ${mode===id?"border-brand-teal bg-[#E4F3EE] dark:bg-[#25443D]":"border-[#EEE9DF] dark:border-[#3B3D4A]"}`}><Icon size={19} color={mode===id?"#278F7D":"#8B8992"}/><Text className="mt-2 text-xs font-bold text-light-text dark:text-dark-text">{label}</Text></Pressable>)}</View></Card>
+    <Text className="mb-3 mt-7 text-lg font-extrabold text-light-text dark:text-dark-text">About</Text><Card><View className="flex-row items-center justify-between"><Text className="text-sm font-semibold text-light-text dark:text-dark-text">Version</Text><Text className="text-xs text-light-muted dark:text-dark-muted">1.0.0</Text></View><View className="my-3 h-px bg-light-background dark:bg-dark-elevated"/><View className="flex-row items-center justify-between"><Text className="text-sm font-semibold text-light-text dark:text-dark-text">Distribution</Text><Text className="text-xs font-bold text-brand-teal">Central / Self-host</Text></View></Card>
+  </Screen>;
+}
