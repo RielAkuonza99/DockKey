@@ -31,7 +31,11 @@ docs/              Architecture, setup, deployment, and security notes
 
 ## Quality checks
 
-`npm run check` runs typecheck and unit tests (provider adapter, rate limiting, handler). The **CI** workflow runs the same checks plus a secret scan, `expo-doctor`, and an Android JS bundle smoke test on every push, so nothing has to be installed on the phone.
+`npm run check` runs typecheck and unit tests (provider adapter, rate limiting, handler). The **CI** workflow (`npm ci`, secret scan, typecheck, tests, required `expo-doctor`, Android bundle export) blocks on any failure. If `package-lock.json` is missing, run **Bootstrap dependencies** once: it applies `expo install --fix`, regenerates the lockfile, and opens a PR.
+
+### Verification statuses
+
+`/generate` returns `status: accepted`. `/verify` returns `completed` only when the provider returns a verification link or `oobCode`; otherwise `pending`. A bare HTTP 200 is never treated as completed. The provider's own status vocabulary is not published, so it is not interpreted.
 
 ## Requirements
 
@@ -94,7 +98,7 @@ npx eas-cli env:create --name EXPO_PUBLIC_API_BASE_URL --value https://YOUR-BACK
 npx eas-cli build --platform android --profile production
 ```
 
-Builds can also be started from GitHub: add an `EXPO_TOKEN` repository secret and run the **EAS Android build** workflow (Actions tab). The APK URL is printed in the run summary.
+Builds can also be started from GitHub: add the `EXPO_TOKEN` secret and the `API_BASE_URL` repository variable, then run **EAS Android build** (Actions tab). The workflow refuses to build unless the backend health check reports provider and rate limit configured, and it only reports success when EAS returns a FINISHED build with a reachable APK URL.
 
 Do not put `GENCIPTA_API_KEY` in Expo or `EXPO_PUBLIC_*` variables. Only the public DockKey backend URL belongs in the mobile build.
 

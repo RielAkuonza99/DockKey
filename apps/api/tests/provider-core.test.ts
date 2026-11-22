@@ -68,11 +68,17 @@ describe("mapProviderFailure", () => {
 describe("normalizeProviderResponse", () => {
   it("returns only recognized fields for verify", () => {
     const r = normalizeProviderResponse("verify", "a@b.co", { success: true, data: { link: "https://x.test/?oobCode=1", oob_code: "abc", leak: "no" }, token: "no" });
-    assert.deepEqual(r, { success: true, email: "a@b.co", message: "Permintaan verifikasi diterima provider.", verificationUrl: "https://x.test/?oobCode=1", oobCode: "abc" });
+    assert.deepEqual(r, { success: true, status: "completed", email: "a@b.co", message: "Permintaan verifikasi diterima provider.", verificationUrl: "https://x.test/?oobCode=1", oobCode: "abc" });
   });
   it("ignores non-https links and does not expose links on send", () => {
     assert.equal(normalizeProviderResponse("verify", "a@b.co", { link: "javascript:alert(1)" }).verificationUrl, undefined);
     assert.equal(normalizeProviderResponse("send", "a@b.co", { link: "https://x.test", oobCode: "z" }).verificationUrl, undefined);
+  });
+  it("does not treat a bare 200 verify response as completed", () => {
+    assert.equal(normalizeProviderResponse("verify", "a@b.co", { success: true, message: "ok" }).status, "pending");
+    assert.equal(normalizeProviderResponse("verify", "a@b.co", "").status, "pending");
+    assert.equal(normalizeProviderResponse("verify", "a@b.co", { oobCode: "abc" }).status, "completed");
+    assert.equal(normalizeProviderResponse("send", "a@b.co", { oobCode: "abc" }).status, "accepted");
   });
   it("detects explicit provider failure", () => {
     assert.equal(normalizeProviderResponse("send", "a@b.co", { success: false, message: "gagal" }).success, false);

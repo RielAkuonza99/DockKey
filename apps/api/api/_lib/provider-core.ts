@@ -20,8 +20,16 @@ export interface ProviderSettings {
   GENCIPTA_REQUEST_FORMAT: "json" | "form";
 }
 
+/**
+ * accepted  - provider accepted a send request (no verification evidence exists yet)
+ * pending   - verify call succeeded but returned no verification evidence
+ * completed - verify call returned evidence (a https link or an oobCode)
+ */
+export type VerificationStatus = "accepted" | "pending" | "completed";
+
 export interface ProviderResult {
   success: boolean;
+  status: VerificationStatus;
   email: string;
   message: string;
   verificationUrl?: string;
@@ -108,8 +116,13 @@ export function normalizeProviderResponse(action: ProviderAction, email: string,
   const verificationUrl = urls.find((v): v is string => typeof v === "string" && /^https:\/\//i.test(v));
   const codes = [record.oobCode, record.oob_code, nested.oobCode, nested.oob_code];
   const oobCode = codes.find((v): v is string => typeof v === "string" && v.length > 0 && v.length <= 2048);
+  const hasEvidence = action === "verify" && Boolean(verificationUrl || oobCode);
+  // HTTP 200 alone is never proof of completion. Only documented evidence
+  // (verification link or oobCode) marks a verification as completed.
+  const status: VerificationStatus = action === "send" ? "accepted" : hasEvidence ? "completed" : "pending";
   return {
     success,
+    status,
     email,
     message,
     ...(action === "verify" && verificationUrl ? { verificationUrl } : {}),

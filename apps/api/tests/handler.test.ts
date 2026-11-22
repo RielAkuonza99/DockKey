@@ -54,7 +54,7 @@ describe("generatorHandler", () => {
     assert.equal(out.status, 200);
     assert.equal(seen.url, "https://gw.test/send");
     assert.equal((seen.init?.headers as Record<string, string>)["x-api-key"], "k");
-    assert.deepEqual(out.body, { data: { success: true, email: "user@example.com", message: "ok" }, meta: { action: "send" } });
+    assert.deepEqual(out.body, { data: { success: true, status: "accepted", email: "user@example.com", message: "ok" }, meta: { action: "send" } });
   });
   it("enforces rate limits", async () => {
     globalThis.fetch = (async () => new Response("{}", { status: 200, headers: { "content-type": "application/json" } })) as never;

@@ -7,6 +7,7 @@ export type HistoryItem = {
   email: string;
   action: "send" | "verify";
   status: "success" | "failed";
+  verification?: "accepted" | "pending" | "completed";
   message: string;
   createdAt: string;
 };

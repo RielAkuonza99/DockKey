@@ -15,34 +15,28 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: "**/package.json"
+      - name: Require lockfile
+        run: test -f package-lock.json || (echo "package-lock.json missing. Run the 'Bootstrap dependencies' workflow." && exit 1)
       - name: Secret scan
         run: .github/check-secrets.sh
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-      - name: Typecheck (api, mobile, contracts)
+      - name: Install (npm ci)
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck (all workspaces)
         run: npm run typecheck
-      - name: Unit tests
+      - name: Unit and handler tests
         run: npm test
-      - name: Expo dependency check
+      - name: Expo Doctor (required)
         working-directory: apps/mobile
-        run: npx --yes expo-doctor@latest
-        continue-on-error: true
-      - name: Bundle Android JS (smoke test)
+        run: npx expo-doctor
+      - name: Android bundle (expo export)
         working-directory: apps/mobile
         env:
           EXPO_PUBLIC_API_BASE_URL: https://dockkey-ci.invalid
         run: npx expo export --platform android
-      - name: Upload generated lockfile
-        uses: actions/upload-artifact@v4
-        with:
-          name: package-lock
-          path: package-lock.json
-          if-no-files-found: ignore

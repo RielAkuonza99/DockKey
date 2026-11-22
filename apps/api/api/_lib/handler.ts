@@ -24,6 +24,7 @@ export async function generatorHandler(req: VercelRequest, res: VercelResponse, 
     return res.status(200).json({
       data: {
         success: true,
+        status: result.status,
         email: result.email,
         message: result.message,
         ...(result.verificationUrl ? { verificationUrl: result.verificationUrl } : {}),

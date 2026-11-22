@@ -16,22 +16,59 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+      - name: Validate prerequisites
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -f package-lock.json || { echo "::error::package-lock.json missing"; exit 1; }
+          [ -n "$EXPO_TOKEN" ] || { echo "::error::EXPO_TOKEN secret is not set"; exit 1; }
+          [ -n "$API_BASE_URL" ] || { echo "::error::Repository variable API_BASE_URL is not set"; exit 1; }
+          case "$API_BASE_URL" in https://*) ;; *) echo "::error::API_BASE_URL must be https"; exit 1;; esac
+      - name: Backend must be live and configured
+        run: |
+          set -euo pipefail
+          body=$(curl --fail --silent --show-error --max-time 20 "${API_BASE_URL%/}/api/v1/health")
+          echo "$body" | node -e "
+            const d=JSON.parse(require('fs').readFileSync(0,'utf8')).data;
+            if(d?.status!=='ok'||!d.configured?.provider||!d.configured?.rateLimit){console.error('Backend not ready:',JSON.stringify(d));process.exit(1)}
+            console.log('Backend healthy, mode:',d.mode)"
       - uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
+      - name: Validate EAS project link
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          grep -q '"projectId"' app.json || { echo "::error::app.json has no extra.eas.projectId. Run 'eas init' and commit."; exit 1; }
+          eas project:info
       - name: Build APK on EAS
         working-directory: apps/mobile
         run: |
-          eas build --platform android --profile "${{ inputs.profile }}" --non-interactive --json > build.json
-          cat build.json
-          url=$(node -e "const b=JSON.parse(require('fs').readFileSync('build.json','utf8'));console.log((Array.isArray(b)?b[0]:b).artifacts?.buildUrl||'')")
-          echo "### APK (${{ inputs.profile }})" >> "$GITHUB_STEP_SUMMARY"
-          echo "${url:-No artifact URL returned}" >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          eas build --platform android --profile "${{ inputs.profile }}" --non-interactive --json > "$RUNNER_TEMP/build.json"
+          node -e "
+            const fs=require('fs');
+            const raw=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/build.json','utf8'));
+            const b=Array.isArray(raw)?raw[0]:raw;
+            const url=b?.artifacts?.buildUrl;
+            if(b?.status!=='FINISHED'||!url){console.error('Build failed or no artifact URL. status=',b?.status);process.exit(1)}
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,'### APK ('+process.argv[1]+')\n'+url+'\n');
+            console.log('APK URL:',url)" "${{ inputs.profile }}"
+      - name: Verify APK URL is reachable
+        working-directory: apps/mobile
+        run: |
+          set -euo pipefail
+          url=$(node -e "const r=JSON.parse(require('fs').readFileSync(process.env.RUNNER_TEMP+'/build.json','utf8'));console.log((Array.isArray(r)?r[0]:r).artifacts.buildUrl)")
+          curl --fail --silent --show-error --location --head --max-time 60 "$url" > /dev/null
+          echo "APK URL reachable"
