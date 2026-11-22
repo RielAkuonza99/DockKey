@@ -20,6 +20,8 @@ jobs:
       API_BASE_URL: ${{ vars.API_BASE_URL }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require lockfile
+        run: test -f package-lock.json || { echo "::error::package-lock.json missing. Run the Bootstrap dependencies workflow."; exit 1; }
       - uses: actions/setup-node@v4
         with:
           node-version: 22
