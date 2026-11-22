@@ -16,7 +16,7 @@ export default function HomeScreen() {
     <SectionTitle title="Ringkasan aktivitas" />
     <View className="flex-row gap-3"><Card className="flex-1"><Activity color="#278F7D" size={22}/><Text className="mt-3 text-2xl font-extrabold text-light-text dark:text-dark-text">{items.length}</Text><Text className="mt-1 text-xs text-light-muted dark:text-dark-muted">Total request</Text></Card><Card className="flex-1"><ShieldCheck color="#278F7D" size={22}/><Text className="mt-3 text-2xl font-extrabold text-light-text dark:text-dark-text">{successful}</Text><Text className="mt-1 text-xs text-light-muted dark:text-dark-muted">Request berhasil</Text></Card></View>
     <SectionTitle title="Informasi" />
-    <Card><Text className="text-sm font-bold text-light-text dark:text-dark-text">Kredensial provider terlindungi</Text><Text className="mt-2 text-sm leading-6 text-light-muted dark:text-dark-muted">API Key GenCipta disimpan di backend deployment. Aplikasi tidak meminta atau menyimpan API Key provider.</Text></Card>
+    <Card><Text className="text-sm font-bold text-light-text dark:text-dark-text">Kredensial provider terlindungi</Text><Text className="mt-2 text-sm leading-6 text-light-muted dark:text-dark-muted">API Key AM API Service disimpan di backend deployment. Aplikasi tidak meminta atau menyimpan API Key provider.</Text></Card>
     <Text className="mt-5 text-center text-xs text-light-muted dark:text-dark-muted">DockKey 1.0.0 • Central / Self-host</Text>
   </Screen>;
 }

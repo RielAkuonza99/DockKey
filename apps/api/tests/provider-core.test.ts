@@ -1,57 +1,38 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import {
-  buildProviderRequest,
-  mapProviderFailure,
-  normalizeProviderResponse,
-  ProviderError,
-  type ProviderSettings
-} from "../api/_lib/provider-core.js";
+import { buildProviderRequest, mapProviderFailure, normalizeProviderResponse, ProviderError, type ProviderSettings } from "../api/_lib/provider-core.js";
 import { checkLocalLimit } from "../api/_lib/rate-limit-local.js";
 
-const base: ProviderSettings = {
-  GENCIPTA_API_KEY: "sekret-123",
-  GENCIPTA_API_KEY_HEADER: "x-api-key",
-  GENCIPTA_API_KEY_PREFIX: "",
-  GENCIPTA_BASE_URL: "https://gateway.example.test",
-  GENCIPTA_SEND_PATH: "/send",
-  GENCIPTA_VERIFY_PATH: "/verify",
-  GENCIPTA_REQUEST_FORMAT: "json"
-};
+const base: ProviderSettings = { AM_API_KEY: "secret-key", AM_API_BASE_URL: "https://am-api-service.vercel.app" };
 
 describe("buildProviderRequest", () => {
-  it("builds a JSON request with the configured auth header", () => {
+  it("builds the documented send-link JSON body", () => {
     const r = buildProviderRequest(base, "send", "a@b.co");
-    assert.equal(r.url, "https://gateway.example.test/send");
-    assert.equal(r.headers["x-api-key"], "sekret-123");
+    assert.equal(r.url, "https://am-api-service.vercel.app/api/alightmotion/send-link");
     assert.equal(r.headers["Content-Type"], "application/json");
-    assert.equal(r.body, JSON.stringify({ email: "a@b.co" }));
+    assert.deepEqual(JSON.parse(r.body), { email: "a@b.co", apiKey: "secret-key" });
+    assert.equal(r.headers["x-api-key"], undefined);
   });
-  it("applies key prefix and form encoding", () => {
-    const r = buildProviderRequest({ ...base, GENCIPTA_API_KEY_HEADER: "Authorization", GENCIPTA_API_KEY_PREFIX: "Bearer ", GENCIPTA_REQUEST_FORMAT: "form" }, "verify", "a+b@c.co");
-    assert.equal(r.headers.Authorization, "Bearer sekret-123");
-    assert.equal(r.headers["Content-Type"], "application/x-www-form-urlencoded");
-    assert.equal(r.body, "email=a%2Bb%40c.co");
+  it("builds the documented verify-link body including magicLink", () => {
+    const r = buildProviderRequest(base, "verify", "a@b.co", "https://alight.link/verify?id=123");
+    assert.equal(r.url, "https://am-api-service.vercel.app/api/alightmotion/verify-link");
+    assert.deepEqual(JSON.parse(r.body), { email: "a@b.co", magicLink: "https://alight.link/verify?id=123", apiKey: "secret-key" });
   });
-  it("fails closed when the key, header or endpoint is missing", () => {
-    for (const [patch, code] of [
-      [{ GENCIPTA_API_KEY: "" }, "PROVIDER_NOT_CONFIGURED"],
-      [{ GENCIPTA_API_KEY_HEADER: "" }, "PROVIDER_AUTH_NOT_CONFIGURED"],
-      [{ GENCIPTA_VERIFY_PATH: "" }, "PROVIDER_ENDPOINT_NOT_CONFIGURED"]
-    ] as const) {
-      assert.throws(() => buildProviderRequest({ ...base, ...patch }, "verify", "a@b.co"), (e: unknown) => e instanceof ProviderError && e.code === code && e.status === 503);
-    }
+  it("requires a key and HTTPS magic link", () => {
+    assert.throws(() => buildProviderRequest({ ...base, AM_API_KEY: "" }, "send", "a@b.co"), (e: unknown) => e instanceof ProviderError && e.code === "PROVIDER_NOT_CONFIGURED");
+    assert.throws(() => buildProviderRequest(base, "verify", "a@b.co"), (e: unknown) => e instanceof ProviderError && e.code === "INVALID_MAGIC_LINK");
+    assert.throws(() => buildProviderRequest(base, "verify", "a@b.co", "javascript:alert(1)"), ProviderError);
   });
   it("rejects non-HTTPS provider endpoints", () => {
-    assert.throws(() => buildProviderRequest({ ...base, GENCIPTA_BASE_URL: "http://gateway.example.test" }, "send", "a@b.co"), ProviderError);
+    assert.throws(() => buildProviderRequest({ ...base, AM_API_BASE_URL: "http://am-api-service.vercel.app" }, "send", "a@b.co"), ProviderError);
   });
 });
 
 describe("mapProviderFailure", () => {
   it("hides provider auth failure details", () => {
-    const e = mapProviderFailure(401, { message: "Invalid key sekret-123" }, "sekret-123");
+    const e = mapProviderFailure(401, { message: "Invalid key" });
     assert.equal(e.code, "PROVIDER_AUTH_FAILED");
-    assert.ok(!e.message.includes("sekret"));
+    assert.ok(!e.message.includes("Invalid key"));
   });
   it("maps 429, 5xx and 4xx", () => {
     assert.equal(mapProviderFailure(429, {}).status, 429);
@@ -60,29 +41,17 @@ describe("mapProviderFailure", () => {
     assert.equal(e.code, "PROVIDER_REQUEST_FAILED");
     assert.equal(e.message, "Email tidak valid");
   });
-  it("redacts the secret from forwarded messages", () => {
-    assert.ok(!mapProviderFailure(400, { message: "bad sekret-123 here" }, "sekret-123").message.includes("sekret-123"));
-  });
 });
 
 describe("normalizeProviderResponse", () => {
-  it("returns only recognized fields for verify", () => {
-    const r = normalizeProviderResponse("verify", "a@b.co", { success: true, data: { link: "https://x.test/?oobCode=1", oob_code: "abc", leak: "no" }, token: "no" });
-    assert.deepEqual(r, { success: true, status: "completed", email: "a@b.co", message: "Permintaan verifikasi diterima provider.", verificationUrl: "https://x.test/?oobCode=1", oobCode: "abc" });
+  it("does not leak provider session tokens", () => {
+    const r = normalizeProviderResponse("verify", "a@b.co", { success: true, message: "verified", idToken: "secret-token", refreshToken: "refresh-secret" });
+    assert.deepEqual(r, { success: true, status: "completed", email: "a@b.co", message: "verified" });
+    assert.equal(JSON.stringify(r).includes("secret-token"), false);
   });
-  it("ignores non-https links and does not expose links on send", () => {
-    assert.equal(normalizeProviderResponse("verify", "a@b.co", { link: "javascript:alert(1)" }).verificationUrl, undefined);
-    assert.equal(normalizeProviderResponse("send", "a@b.co", { link: "https://x.test", oobCode: "z" }).verificationUrl, undefined);
-  });
-  it("does not treat a bare 200 verify response as completed", () => {
-    assert.equal(normalizeProviderResponse("verify", "a@b.co", { success: true, message: "ok" }).status, "pending");
-    assert.equal(normalizeProviderResponse("verify", "a@b.co", "").status, "pending");
-    assert.equal(normalizeProviderResponse("verify", "a@b.co", { oobCode: "abc" }).status, "completed");
-    assert.equal(normalizeProviderResponse("send", "a@b.co", { oobCode: "abc" }).status, "accepted");
-  });
-  it("detects explicit provider failure", () => {
+  it("detects explicit failure but accepts a normal 2xx payload", () => {
     assert.equal(normalizeProviderResponse("send", "a@b.co", { success: false, message: "gagal" }).success, false);
-    assert.equal(normalizeProviderResponse("send", "a@b.co", "plain text").success, true);
+    assert.equal(normalizeProviderResponse("send", "a@b.co", { message: "sent" }).success, true);
   });
 });
 

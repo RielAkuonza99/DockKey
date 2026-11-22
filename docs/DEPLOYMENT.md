@@ -6,9 +6,9 @@
 2. Import it into Vercel.
 3. Set the Vercel project's Root Directory to `apps/api`.
 4. Use Node.js runtime supported by Vercel and the package dependencies.
-5. Add all variables from `apps/api/.env.example` to the relevant Vercel environments.
+5. Add `AM_API_KEY`, `AM_API_BASE_URL`, `AM_API_TIMEOUT_MS`, and the Upstash/rate-limit variables from `apps/api/.env.example` to the relevant Vercel environments.
 6. Create an Upstash Redis database and configure its REST URL/token.
-7. Configure `GENCIPTA_API_KEY` and confirm the exact auth header/prefix, verify path, and request format against the GenCipta playground or provider support.
+7. Configure `AM_API_KEY` from the AM API Service dashboard. The provider client documentation specifies JSON POST bodies containing `apiKey`; no custom API-key header or prefix is used by this adapter.
 8. Deploy and check `/api/v1/health`.
 
 Central deployment: `APP_MODE=central`.
@@ -35,7 +35,7 @@ Run `npx vercel dev` from `apps/api`. Run `npx expo start` from `apps/mobile`. F
 
 1. Vercel: deploy, set env vars (including Upstash), then `GET /api/v1/health` must show `configured.provider: true` and `configured.rateLimit: true`.
 2. `POST /api/v1/generate` with a real address you own; confirm the email arrives.
-3. `POST /api/v1/verify`; confirm the provider response is normalized.
+3. `POST /api/v1/verify` with both `email` and the copied HTTPS `magicLink`; confirm the provider accepts the link. DockKey deliberately does not forward provider session tokens to the APK.
 4. Send more than `RATE_LIMIT_REQUESTS` requests inside the window; expect `429 RATE_LIMITED` with `Retry-After`.
 5. Build the `preview` APK, test on a device, then the `production` APK.
-6. Confirm no `GENCIPTA_*` value appears in EAS environment variables, the repository, or the APK.
+6. Confirm no `AM_API_KEY` value appears in EAS environment variables, the repository, or the APK.

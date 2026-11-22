@@ -1,22 +1,22 @@
 # DockKey
 
-DockKey is an Expo Android application for the GenCipta AM Generator workflow. The mobile client calls a Vercel Functions backend; the GenCipta API key is stored only in the backend environment and is never bundled into the APK.
+DockKey is an Expo Android application for the AM API Service AM Generator workflow. The mobile client calls a Vercel Functions backend; the AM API Service API key is stored only in the backend environment and is never bundled into the APK.
 
 ## Product behavior
 
 1. The user enters an email in DockKey.
 2. DockKey calls `POST /api/v1/generate`.
-3. The Vercel function calls GenCipta's send-verification endpoint.
+3. The Vercel function calls AM API Service's send-verification endpoint.
 4. The user checks the email and returns to DockKey.
-5. DockKey calls `POST /api/v1/verify` with the same email.
-6. The backend returns the provider's verification result. If the provider returns a verification URL or `oobCode`, the app displays it for the user to continue.
+5. The user copies the HTTPS magic link from the email and pastes it into DockKey.
+6. DockKey calls `POST /api/v1/verify` with the email and magic link. The backend processes the link and returns only a safe status/message; provider session tokens are discarded.
 
 DockKey has no user login, admin login, in-app payment, subscription, balance, or user-managed provider key.
 
 ## Distribution modes
 
-- **Central APK:** the app points to the DockKey-managed Vercel deployment. Requests consume the GenCipta quota of the API key configured by the DockKey operator.
-- **Public source / self-host:** developers deploy `apps/api` to their own Vercel project, configure their own GenCipta API key, and build the Expo app with their backend URL.
+- **Central APK:** the app points to the DockKey-managed Vercel deployment. Requests consume the AM API Service quota of the API key configured by the DockKey operator.
+- **Public source / self-host:** developers deploy `apps/api` to their own Vercel project, configure their own AM API Service API key, and build the Expo app with their backend URL.
 
 The same source tree supports both modes. `APP_MODE` is informational (`central` or `selfhost`); it does not change provider credentials by itself.
 
@@ -35,7 +35,7 @@ docs/              Architecture, setup, deployment, and security notes
 
 ### Verification statuses
 
-`/generate` returns `status: accepted`. `/verify` returns `completed` only when the provider returns a verification link or `oobCode`; otherwise `pending`. A bare HTTP 200 is never treated as completed. The provider's own status vocabulary is not published, so it is not interpreted.
+`/generate` returns `status: accepted`. `/verify` returns `completed` when the provider verify endpoint returns a successful HTTP response. The provider response is allow-listed and session tokens are never forwarded to the mobile client.
 
 ## Requirements
 
@@ -43,7 +43,7 @@ docs/              Architecture, setup, deployment, and security notes
 - npm with workspaces support
 - Expo account and EAS CLI for cloud APK builds
 - Vercel account for backend deployment
-- GenCipta API key
+- AM API Service API key
 - Upstash Redis REST database for production rate limiting
 
 ## Local development
@@ -59,7 +59,7 @@ Run the backend locally:
 ```bash
 cd apps/api
 cp .env.example .env
-# Fill in GenCipta values and Upstash values for production-like testing.
+# Fill in AM API Service values and Upstash values for production-like testing.
 npx vercel dev
 ```
 
@@ -78,7 +78,7 @@ For a physical Android device, do not use `localhost` as the API hostname. Use t
 
 Create a Vercel project from this repository and set **Root Directory** to `apps/api`. Configure the environment variables listed in `apps/api/.env.example` in Vercel Project Settings. Add a production Upstash Redis database and set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`.
 
-Set `APP_MODE=central` for the official backend or `APP_MODE=selfhost` for a self-hosted backend. Add the GenCipta API key and the exact authentication header configuration confirmed by GenCipta. Deploy.
+Set `APP_MODE=central` for the official backend or `APP_MODE=selfhost` for a self-hosted backend. Add the AM API Service API key and the exact authentication header configuration confirmed by AM API Service. Deploy.
 
 The API routes are:
 
@@ -100,19 +100,18 @@ npx eas-cli build --platform android --profile production
 
 Builds can also be started from GitHub: add the `EXPO_TOKEN` secret and the `API_BASE_URL` repository variable, then run **EAS Android build** (Actions tab). The workflow refuses to build unless the backend health check reports provider and rate limit configured, and it only reports success when EAS returns a FINISHED build with a reachable APK URL.
 
-Do not put `GENCIPTA_API_KEY` in Expo or `EXPO_PUBLIC_*` variables. Only the public DockKey backend URL belongs in the mobile build.
+Do not put `AM_API_KEY` in Expo or `EXPO_PUBLIC_*` variables. Only the public DockKey backend URL belongs in the mobile build.
 
-## Provider contract status
+## Provider integration: AM API Service
 
-Confirmed from the public GenCipta AM Generator page: the send endpoint `https://gateway.gencipta.com/api/am-generator/send-link`, the POST method, the `email` parameter, and a sample success response. A second endpoint, **Verify Email Link**, accepts the same email and returns a verification link or `oobCode`.
+DockKey integrates with `https://am-api-service.vercel.app` using the published client contract:
 
-**Not published, so no defaults are shipped:** the verify endpoint path, the API-key HTTP header, and the exact request encoding. Set these in the backend environment from the GenCipta dashboard/playground or provider support:
+- `POST /api/alightmotion/send-link` with JSON `{ "email": "user@example.com", "apiKey": "..." }`.
+- `POST /api/alightmotion/verify-link` with JSON `{ "email": "user@example.com", "magicLink": "https://...", "apiKey": "..." }`.
 
-- `GENCIPTA_API_KEY_HEADER` / `GENCIPTA_API_KEY_PREFIX`
-- `GENCIPTA_VERIFY_PATH`
-- `GENCIPTA_REQUEST_FORMAT` (`json` or `form`)
+The API key is added by the DockKey backend and is never included in the APK. The user must copy the HTTPS magic link received by email and paste it into DockKey for the verify operation. The provider's verify response includes session tokens; DockKey intentionally discards provider response fields and returns only a safe status/message to the app.
 
-Until they are set the API fails closed with `503 PROVIDER_AUTH_NOT_CONFIGURED` / `PROVIDER_ENDPOINT_NOT_CONFIGURED`. `GET /api/v1/health` reports (as booleans only) whether provider and rate-limit configuration is present. Live integration is not verified until a real send + verify round trip has been run with a real key.
+Configure `AM_API_KEY` in Vercel. The default provider base URL is `https://am-api-service.vercel.app`; override it only if the provider publishes a different gateway. A real send + verify round trip is still required before production release.
 
 ## Security
 
@@ -121,7 +120,7 @@ Until they are set the API fails closed with `503 PROVIDER_AUTH_NOT_CONFIGURED` 
 - Production rate limiting requires Upstash Redis; without it the API fails closed instead of silently using per-instance memory limits.
 - Rate limiting is IP-based. Since the central API has no user login, a public APK cannot provide a strong identity boundary. Keep strict rate limits and monitor provider quota. Consider adding a bot challenge or attestation before distributing the central APK widely.
 - The app stores history locally. The backend does not persist email addresses or request bodies.
-- Verification URLs and `oobCode` values are sensitive activation material; do not share them or write them to logs.
+- Magic links are sensitive activation material; do not share them or write them to logs.
 
 ## License and public repository
 

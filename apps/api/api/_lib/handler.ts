@@ -3,9 +3,9 @@ import { z } from "zod";
 import { ConfigError } from "./config.js";
 import { applyCors, errorResponse, setSecurityHeaders } from "./http.js";
 import { enforceRateLimit } from "./rate-limit.js";
-import { callGenCipta, ProviderError } from "./provider.js";
+import { callAmApi, ProviderError } from "./provider.js";
 
-const emailSchema = z.object({ email: z.string().trim().toLowerCase().email().max(254) }).strict();
+const requestSchema = z.object({ email: z.string().trim().toLowerCase().email().max(254), magicLink: z.string().trim().url().optional() }).strict();
 
 export async function generatorHandler(req: VercelRequest, res: VercelResponse, action: "send" | "verify") {
   setSecurityHeaders(res);
@@ -17,18 +17,17 @@ export async function generatorHandler(req: VercelRequest, res: VercelResponse, 
       return errorResponse(res, 405, "METHOD_NOT_ALLOWED", "Gunakan POST untuk endpoint ini.");
     }
     if (!(await enforceRateLimit(req, res))) return;
-    const parsed = emailSchema.safeParse(req.body);
-    if (!parsed.success) return errorResponse(res, 400, "INVALID_EMAIL", "Masukkan alamat email yang valid.");
-    const result = await callGenCipta(action, parsed.data.email);
+    const parsed = requestSchema.safeParse(req.body);
+    if (!parsed.success) return errorResponse(res, 400, "INVALID_REQUEST", "Periksa alamat email dan data permintaan.");
+    if (action === "verify" && !parsed.data.magicLink) return errorResponse(res, 400, "MAGIC_LINK_REQUIRED", "Tempel magic link dari email Alight Motion.");
+    const result = await callAmApi(action, parsed.data.email, parsed.data.magicLink);
     if (!result.success) return errorResponse(res, 502, "PROVIDER_REJECTED", result.message);
     return res.status(200).json({
       data: {
         success: true,
         status: result.status,
         email: result.email,
-        message: result.message,
-        ...(result.verificationUrl ? { verificationUrl: result.verificationUrl } : {}),
-        ...(result.oobCode ? { oobCode: result.oobCode } : {})
+        message: result.message
       },
       meta: { action }
     });

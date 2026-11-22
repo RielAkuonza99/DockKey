@@ -3,7 +3,7 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL?.trim().replace(/\/+$/
 type ApiEnvelope<T> = { data: T; meta?: { action?: string } };
 type ApiFailure = { error?: { code?: string; message?: string } };
 export type VerificationStatus = "accepted" | "pending" | "completed";
-export type GeneratorResult = { success: boolean; status: VerificationStatus; email: string; message: string; verificationUrl?: string; oobCode?: string };
+export type GeneratorResult = { success: boolean; status: VerificationStatus; email: string; message: string };
 
 const REQUEST_TIMEOUT_MS = 25000;
 
@@ -54,8 +54,8 @@ export function sendVerificationEmail(email: string) {
   return apiRequest<GeneratorResult>("/api/v1/generate", { method: "POST", body: JSON.stringify({ email }) });
 }
 
-export function verifyEmail(email: string) {
-  return apiRequest<GeneratorResult>("/api/v1/verify", { method: "POST", body: JSON.stringify({ email }) });
+export function verifyEmail(email: string, magicLink: string) {
+  return apiRequest<GeneratorResult>("/api/v1/verify", { method: "POST", body: JSON.stringify({ email, magicLink }) });
 }
 
 export async function checkApiHealth() {

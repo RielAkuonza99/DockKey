@@ -14,18 +14,18 @@ Vercel Functions (apps/api)
     |-- server-side environment secrets
     |
     v
-GenCipta Gateway
+AM API Service
     |-- send verification email
-    |-- retrieve verification link / oobCode
+    |-- verify the copied magic link and receive provider session tokens (discarded by DockKey)
 ```
 
 ## Central mode
 
-The official APK points to the DockKey operator's Vercel URL. The operator configures one GenCipta API key in Vercel. All APK requests consume that provider key's quota. Users do not configure provider credentials and do not create accounts.
+The official APK points to the DockKey operator's Vercel URL. The operator configures one AM API Service API key in Vercel. All APK requests consume that provider key's quota. Users do not configure provider credentials and do not create accounts.
 
 ## Self-host mode
 
-A developer forks or downloads the public source, deploys `apps/api` to their own Vercel project, configures their own GenCipta API key and provider auth settings, then builds the Expo app with their own backend URL. The same codebase is used; no separate product fork is required.
+A developer forks or downloads the public source, deploys `apps/api` to their own Vercel project, configures their own AM API Service API key, then builds the Expo app with their own backend URL. The same codebase is used; no separate product fork is required.
 
 ## Trust boundaries
 
@@ -33,7 +33,7 @@ A developer forks or downloads the public source, deploys `apps/api` to their ow
 - Vercel environment variables hold provider secrets.
 - Upstash Redis is required for distributed production rate limiting because Vercel Functions are stateless and may execute on multiple instances.
 - The API does not use user/admin authentication. IP rate limiting is abuse mitigation, not user authentication.
-- Email addresses are sent to GenCipta only for the requested operation. DockKey does not persist them on the backend.
+- Email addresses are sent to AM API Service only for the requested operation. DockKey does not persist them on the backend.
 - Local history is stored on the device and can be cleared by the user.
 
 ## API contract
@@ -46,14 +46,14 @@ Returns service status, version, and deployment mode. It does not reveal secret 
 
 Request: `{ "email": "user@example.com" }`
 
-Calls the GenCipta send-verification endpoint.
+Calls the AM API Service send-link endpoint.
 
 ### `POST /api/v1/verify`
 
-Request: `{ "email": "user@example.com" }`
+Request: `{ "email": "user@example.com", "magicLink": "https://..." }`
 
-Calls the GenCipta verify-link endpoint. If the provider returns a verification URL or `oobCode`, the backend forwards only those recognized fields to the same requesting client. It does not forward arbitrary provider payloads.
+Calls the AM API Service verify-link endpoint. Provider session tokens are intentionally discarded; only a normalized success status and message are returned to the app.
 
 ## Provider configuration
 
-See `apps/api/.env.example`. The public documentation currently confirms the send path but does not fully expose the API-key header or verify endpoint details in its rendered example. These settings remain configurable and must be verified before production deployment.
+See `apps/api/.env.example`. The provider client repository documents both endpoint paths and JSON request bodies. `apiKey` is passed in the request body; no custom header or prefix is required by this integration. Verify requires the HTTPS magic link copied from the email.

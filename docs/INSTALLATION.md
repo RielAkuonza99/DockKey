@@ -6,12 +6,12 @@
 - npm
 - Vercel account
 - Upstash Redis REST database
-- GenCipta API key
+- AM API Service API key
 - Expo/EAS account for APK builds
 
 ## Backend
 
-Deploy `apps/api` as the Vercel project root. Copy `apps/api/.env.example` into the Vercel environment settings and configure the GenCipta auth header/request format using the provider's current documentation or support response. Production requests require Upstash Redis configuration.
+Deploy `apps/api` as the Vercel project root. Copy `apps/api/.env.example` into the Vercel environment settings and set `AM_API_KEY` from the AM API Service dashboard. The integration sends the key in the backend-to-provider JSON request body. Production requests require Upstash Redis configuration.
 
 ## Mobile
 
@@ -19,4 +19,4 @@ Set `EXPO_PUBLIC_API_BASE_URL` to the Vercel backend URL before building. Run th
 
 ## Important
 
-The public source repository does not include a GenCipta API key. Every self-host deployment must provide its own provider key and quota. Do not add secrets to GitHub or Expo public environment variables.
+The public source repository does not include a AM API Service API key. Every self-host deployment must provide its own provider key and quota. Do not add secrets to GitHub or Expo public environment variables.

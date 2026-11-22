@@ -23,8 +23,7 @@ const realFetch = globalThis.fetch;
 
 beforeEach(() => {
   Object.assign(process.env, {
-    NODE_ENV: "test", GENCIPTA_API_KEY: "k", GENCIPTA_API_KEY_HEADER: "x-api-key",
-    GENCIPTA_BASE_URL: "https://gw.test", GENCIPTA_SEND_PATH: "/send", GENCIPTA_VERIFY_PATH: "/verify",
+    NODE_ENV: "test", AM_API_KEY: "k", AM_API_BASE_URL: "https://am-api.test",
     RATE_LIMIT_REQUESTS: "2", RATE_LIMIT_WINDOW_SECONDS: "60"
   });
   delete process.env.VERCEL; delete process.env.UPSTASH_REDIS_REST_URL; delete process.env.UPSTASH_REDIS_REST_TOKEN;
@@ -43,6 +42,12 @@ describe("generatorHandler", () => {
     await generatorHandler(req("POST", { email: "nope" }, "2.2.2.2"), res, "send");
     assert.equal(out.status, 400);
   });
+  it("requires a magic link for verify", async () => {
+    const { res, out } = mockRes();
+    await generatorHandler(req("POST", { email: "a@b.co" }, "2.3.4.5"), res, "verify");
+    assert.equal(out.status, 400);
+    assert.equal((out.body as { error: { code: string } }).error.code, "MAGIC_LINK_REQUIRED");
+  });
   it("calls the provider and returns a normalized response", async () => {
     let seen: { url?: string; init?: RequestInit } = {};
     globalThis.fetch = (async (url: string, init: RequestInit) => {
@@ -52,8 +57,8 @@ describe("generatorHandler", () => {
     const { res, out } = mockRes();
     await generatorHandler(req("POST", { email: "User@Example.com" }, "3.3.3.3"), res, "send");
     assert.equal(out.status, 200);
-    assert.equal(seen.url, "https://gw.test/send");
-    assert.equal((seen.init?.headers as Record<string, string>)["x-api-key"], "k");
+    assert.equal(seen.url, "https://am-api.test/api/alightmotion/send-link");
+    assert.deepEqual(JSON.parse(String(seen.init?.body)), { email: "user@example.com", apiKey: "k" });
     assert.deepEqual(out.body, { data: { success: true, status: "accepted", email: "user@example.com", message: "ok" }, meta: { action: "send" } });
   });
   it("enforces rate limits", async () => {
@@ -76,12 +81,12 @@ describe("generatorHandler", () => {
   it("does not leak provider auth failures", async () => {
     globalThis.fetch = (async () => new Response(JSON.stringify({ message: "bad key k" }), { status: 401, headers: { "content-type": "application/json" } })) as never;
     const { res, out } = mockRes();
-    await generatorHandler(req("POST", { email: "a@b.co" }, "6.6.6.6"), res, "verify");
+    await generatorHandler(req("POST", { email: "a@b.co", magicLink: "https://alight.link/test" }, "6.6.6.6"), res, "verify");
     assert.equal(out.status, 502);
     assert.ok(!JSON.stringify(out.body).includes("bad key"));
   });
-  it("returns 503 when provider auth is not configured", async () => {
-    process.env.GENCIPTA_API_KEY_HEADER = ""; resetConfigCache();
+  it("returns 503 when provider key is not configured", async () => {
+    process.env.AM_API_KEY = ""; resetConfigCache();
     const { res, out } = mockRes();
     await generatorHandler(req("POST", { email: "a@b.co" }, "7.7.7.7"), res, "send");
     assert.equal(out.status, 503);
